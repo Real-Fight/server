@@ -33,7 +33,7 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
     val objectMapper = jacksonObjectMapper()
     override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
         try {
-            val payload = objectMapper.readValue<Message>(message.payload)
+            val payload = objectMapper.readValue<Message>(message.payload)  // todo look lower
             log.info(message.payload)
             log.info(payload.event.name)
             when (payload.event.name) {
