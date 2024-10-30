@@ -198,6 +198,11 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
                                     "draw" to draw
                             )
                     )
+                    try {
+                        val session = sessions[it]!!  // todo remove !!
+                        userIds.remove(session)
+                        sessions.remove(it)
+                    }catch (e: Exception) { }
                 }
                 endTimestamps.remove(it.key)
                 rooms.remove(it.key)
