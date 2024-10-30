@@ -43,13 +43,7 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
                 "SCOREUPDATE" -> scoreUpdate(session, ScoreUpdateData.fromMap(payload.data))
             }
         } catch (e: Exception) {
-            val message = Message(
-                    Event.BADREQUEST,
-                    mapOf()
-            )
-            session.sendMessage(TextMessage(
-                    objectMapper.writeValueAsString(message)
-            ))
+            sendMessage(session, Event.BADREQUEST, mapOf())
         }
     }
     fun randomMatch(session: WebSocketSession, token: String, matchType: MatchType) {
@@ -62,13 +56,7 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
             userIds.put(session, userId)
             if (queue.isEmpty()) {
                 queue.add(userId)
-                val message = Message(
-                        Event.MATCHOK,
-                        mapOf()
-                )
-                session.sendMessage(TextMessage(
-                        objectMapper.writeValueAsString(message)
-                ))
+                sendMessage(session, Event.MATCHOK, mapOf())
             } else {
                 val matchedUserId = queue.remove()
                 val roomId = UUID.randomUUID()
@@ -83,35 +71,17 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
                                 matchedUserId to UserStatus.READY
                         )
                 ))
-                var message = Message(
-                        Event.MATCHED,
-                        MatchedData(
-                                rivalId = matchedUserId,
-                                roomId = roomId
-                        ).toMap()
-                )
-                session.sendMessage(TextMessage(
-                        objectMapper.writeValueAsString(message)
-                ))
-                message = Message(
-                        Event.MATCHED,
-                        MatchedData(
-                                rivalId = userId,
-                                roomId = roomId
-                        ).toMap()
-                )
-                sessions[matchedUserId]!!.sendMessage(TextMessage(
-                        objectMapper.writeValueAsString(message)
-                ))
+                sendMessage(session, Event.MATCHED, MatchedData(
+                        rivalId = matchedUserId,
+                        roomId = roomId
+                ).toMap())
+                sendMessage(sessions[matchedUserId]!!, Event.MATCHED, MatchedData(
+                        rivalId = userId,
+                        roomId = roomId
+                ).toMap())
             }
         } catch (e: Exception) {
-            val message = Message(
-                    Event.FAILDMATCH,
-                    mapOf()
-            )
-            session.sendMessage(TextMessage(
-                    objectMapper.writeValueAsString(message)
-            ))
+            sendMessage(session, Event.FAILDMATCH, mapOf())
         }
 
     }
@@ -122,11 +92,7 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
         }
         sessions.remove(userId)
         userIds.remove(session)
-        val message = Message(
-                event = Event.MATCHINGCANCELOK,
-                data = mapOf()
-        )
-        session.sendMessage(TextMessage(objectMapper.writeValueAsString(message)))
+        sendMessage(session, Event.MATCHINGCANCELOK, mapOf())
     }
     fun readied(session: WebSocketSession, roomId: UUID) {
         try {
@@ -142,21 +108,14 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
                 val endTimestamp = Timestamp(System.currentTimeMillis() + room.matchType.length)
                 room.endTimestamp = endTimestamp
                 endTimestamps.put(roomId, endTimestamp)
-                val message = Message(
-                        Event.STARTGAME,
-                        mapOf(
-                                "room" to room
-                        )
+                val messageData = mapOf(
+                        "room" to room
                 )
-                session.sendMessage(TextMessage(objectMapper.writeValueAsString(message)))
-                rivals.keys.map { sessions[it]!!.sendMessage(TextMessage(objectMapper.writeValueAsString(message))) }
+                sendMessage(session, Event.STARTGAME, messageData)
+                rivals.keys.map { sendMessage(sessions[it]!!, Event.STARTGAME, messageData) }
             }
         } catch (e: Exception) {
-            val message = Message(
-                    Event.FAILDREADY,
-                    mapOf()
-            )
-            session.sendMessage(TextMessage(objectMapper.writeValueAsString(message)))
+            sendMessage(session, Event.FAILDREADY, mapOf())
         }
 
     }
@@ -165,17 +124,9 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
             val userId = data.id
             val room = rooms[data.roomId]!!
             room.scores[userId] = data.score
-            val message = Message(
-                    event = Event.SCOREUPDATE,
-                    data = data.toMap()
-            )
-            room.users.filter { it.key != userId }.keys.map { sessions[it]!!.sendMessage(TextMessage(objectMapper.writeValueAsString(message))) } // todo remove !!
+            room.users.filter { it.key != userId }.keys.map { sendMessage(sessions[it]!!, Event.SCOREUPDATE, data.toMap()) } // todo remove !!
         } catch (e: Exception) {
-            val message = Message(
-                    Event.FAILDSCOREUPDATE,
-                    mapOf()
-            )
-            session.sendMessage(TextMessage(objectMapper.writeValueAsString(message)))
+            sendMessage(session, Event.FAILDSCOREUPDATE, mapOf())
         }
     }
     @Scheduled(fixedRate = 100)
