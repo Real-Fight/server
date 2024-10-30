@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: fight
+  datasource:
+    driver-class-name: org.mariadb.jdbc.Driver
+    url: jdbc:mariadb://localhost:3306/fight
+    username: root
+    password: Gaine#0628
+    hikari:
+      max-lifetime: 59000
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        default_batch_fetch_size: 1000
+jwt:
+  haeder: Authorization
+  secret: 77+977+977+977+977+9JFEiR++/vXfvv73vv73erVvvv71zSO+/vXLVu++/ve+/ve+/vXPvv71o77+9Ku+/ve+/vXTvv70k77+9Z++/vXpETTQlezPvv714N++/vVki77+977+9JQ==
+  token-expires-time: 3600000000000000000
+server:
+  port: 8081
+socket:
+  host: 0.0.0.0
+  port: 5555
