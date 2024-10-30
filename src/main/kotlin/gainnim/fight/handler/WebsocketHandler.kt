@@ -184,28 +184,20 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
             if (it.value < Timestamp(System.currentTimeMillis())) {
                 log.info("checkRoomEndTimestamp")
                 val room = rooms[it.key]!!
+                val winner = room.scores.maxBy { it.value }
+                val loser = room.scores.minBy { it.value }  // todo optimization
+                var draw: Boolean = false
+                if (winner.value == loser.value) {
+                    draw = true
+                }
                 room.users.keys.map {
-                    val winner = room.scores.maxBy { it.value }
-                    val loser = room.scores.minBy { it.value }
-                    if (winner.value == loser.value) {
-
-                    } else {
-
-                    }
-                    sendMessage(sessions[it]!!, Event.ENDGAME,
+                    sendMessage(sessions[it]!!, Event.ENDGAME,  // todo remove !!
                             mapOf(
-                                    "winner" to room.scores.maxBy { it.value },
-                                    "loser" to room.scores.minBy { it.value }
+                                    "winner" to winner,
+                                    "loser" to loser,
+                                    "draw" to draw
                             )
                     )
-                    val message = Message(
-                            event = Event.ENDGAME,
-                            mapOf(
-                                    "winner" to room.scores.maxBy { it.value },
-                                    "loser" to room.scores.minBy { it.value }
-                            )
-                    )
-                    sessions[it]!!.sendMessage(TextMessage(objectMapper.writeValueAsString(message))) // todo remove !! and try catch
                 }
                 endTimestamps.remove(it.key)
                 rooms.remove(it.key)
