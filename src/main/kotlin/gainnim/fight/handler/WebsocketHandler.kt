@@ -29,7 +29,7 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
             "LONGPUSHUP" to LinkedList()
     )
     val rooms: MutableMap<UUID, Room> = mutableMapOf()
-    val inGameUserAndRoomIds: MutableMap<UUID, UUID> = mutableMapOf()  // userId, roomId
+    val inGameUserSessionsAndRoomIds: MutableMap<WebSocketSession, UUID> = mutableMapOf()  // session, roomId
     val endTimestamps: MutableMap<UUID, Timestamp> = mutableMapOf() // roomId, endTimestamp
     val objectMapper = jacksonObjectMapper()
     override fun handleTextMessage(session: WebSocketSession, message: TextMessage) {
@@ -43,6 +43,7 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
                 "READIED" -> readied(session, UUID.fromString(payload.data["roomId"] as String))
                 "READYINGCANCEL" -> readyingCancel(session, UUID.fromString(payload.data["roomId"] as String))
                 "SCOREUPDATE" -> scoreUpdate(session, ScoreUpdateData.fromMap(payload.data))
+                "GIVEUP" -> giveup(session)
             }
         } catch (e: Exception) {
             sendMessage(session, Event.BADREQUEST, mapOf())
@@ -94,7 +95,7 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
         }
         sessions.remove(userId)
         userIds.remove(session)
-        sendMessage(session, Event.MATCHINGCANCELOK, mapOf())
+        sendMessage(session, Event.MATCHINGCANCELED, mapOf())
     }
     fun readied(session: WebSocketSession, roomId: UUID) {
         try {
@@ -110,13 +111,16 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
                 val endTimestamp = Timestamp(System.currentTimeMillis() + room.matchType.length)
                 room.endTimestamp = endTimestamp
                 endTimestamps.put(roomId, endTimestamp)
-                inGameUserAndRoomIds.put(userId, roomId)
-                rivals.keys.map { inGameUserAndRoomIds.put(it, roomId) }
                 val messageData = mapOf(
                         "room" to room
                 )
+                inGameUserSessionsAndRoomIds.put(session, roomId)
                 sendMessage(session, Event.STARTGAME, messageData)
-                rivals.keys.map { sendMessage(sessions[it]!!, Event.STARTGAME, messageData) }
+                rivals.keys.map {
+                    val session = sessions[it]!!
+                    inGameUserSessionsAndRoomIds.put(session, roomId)
+                    sendMessage(session, Event.STARTGAME, messageData)
+                }
             }
         } catch (e: Exception) {
             sendMessage(session, Event.FAILDREADY, mapOf())
@@ -128,10 +132,10 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
         val rivals = room.users.filter { it.key != userId }
         userIds.remove(session)
         sessions.remove(userId)
-        sendMessage(session, Event.READYINGCANCELOK, mapOf())
+        sendMessage(session, Event.READYINGCANCELED, mapOf())
         rivals.keys.map {
             val session = sessions[it]!!
-            sendMessage(session, Event.READYINGCANCELOK, mapOf())
+            sendMessage(session, Event.READYINGCANCELED, mapOf())
             userIds.remove(session)
             sessions.remove(it)
         }
@@ -147,12 +151,34 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
             sendMessage(session, Event.FAILDSCOREUPDATE, mapOf())
         }
     }
+    fun giveup(session: WebSocketSession) {
+        val roomId = inGameUserSessionsAndRoomIds[session]!!
+        val room = rooms[roomId]!!
+        val userId = userIds[session]!!
+        val winner = room.scores.filter { it.key != userId }
+        val loser = room.scores.filter { it.key == userId }
+        room.users.keys.map {
+            val session = sessions[it]!!
+            sendMessage(session, Event.ENDGAME,
+                    mapOf(
+                            "winner" to winner, // todo how to
+                            "loser" to loser,
+                            "draw" to false
+                    )
+            )
+            userIds.remove(session)
+            sessions.remove(it)
+            inGameUserSessionsAndRoomIds.remove(session)
+        }
+        endTimestamps.remove(roomId)
+        rooms.remove(roomId)
+    }
     @Scheduled(fixedRate = 100)
     fun checkRoomEndTimestamp() {
         endTimestamps.map {
             if (it.value < Timestamp(System.currentTimeMillis())) {
                 log.info("checkRoomEndTimestamp")
-                val room = rooms[it.key]!!
+                val room = rooms[it.key]!!  // todo repect it
                 val winner = room.scores.maxBy { it.value }
                 val loser = room.scores.minBy { it.value }  // todo optimization
                 var draw: Boolean = false
@@ -160,17 +186,18 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
                     draw = true
                 }
                 room.users.keys.map {
-                    sendMessage(sessions[it]!!, Event.ENDGAME,  // todo remove !!
-                            mapOf(
-                                    "winner" to winner,
-                                    "loser" to loser,
-                                    "draw" to draw
-                            )
-                    )
                     try {
-                        val session = sessions[it]!!  // todo remove !!
+                        val session = sessions[it]!!  // todo remove !! what is it
+                        sendMessage(session, Event.ENDGAME,  // todo remove !!
+                                mapOf(
+                                        "winner" to winner,
+                                        "loser" to loser,
+                                        "draw" to draw
+                                )
+                        )
                         userIds.remove(session)
                         sessions.remove(it)
+                        inGameUserSessionsAndRoomIds.remove(session)
                     }catch (e: Exception) { }
                 }
                 endTimestamps.remove(it.key)
@@ -186,7 +213,27 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
             }
             sessions.remove(userId)
             userIds.remove(session)
-        } catch (e: Exception) {}
+            val roomId = inGameUserSessionsAndRoomIds[session]!!
+            val room = rooms[roomId]!!
+            val winner = room.scores.filter { it.key != userId }
+            val loser = room.scores.filter { it.key == userId }
+            room.users.remove(userId)
+            room.users.keys.map {
+                val session = sessions[it]!!
+                sendMessage(session, Event.ENDGAME,
+                        mapOf(
+                            "winner" to winner,
+                            "loser" to loser,
+                            "draw" to false
+                        )
+                )
+                userIds.remove(session)
+                sessions.remove(it)
+                inGameUserSessionsAndRoomIds.remove(session)
+            }
+            endTimestamps.remove(roomId)
+            rooms.remove(roomId)
+        } catch (e: Exception) { }
     }
     fun sendMessage(session: WebSocketSession, event: Event, data: Map<String, Any>) {
         val message = Message(
@@ -261,5 +308,21 @@ enum class UserStatus() {
     READY, ON
 }
 enum class Event() {
-    BADREQUEST, RANDOMMATCH, MATCHINGCANCEL, MATCHINGCANCELOK, MATCHOK, FAILDMATCH, MATCHED, READIED, READYINGCANCEL, READYINGCANCELOK, FAILDREADY, STARTGAME, GIVEUP, RIVALDISCONNECTED, SCOREUPDATE, FAILDSCOREUPDATE, ENDGAME
+    BADREQUEST,
+    RANDOMMATCH,
+    MATCHINGCANCEL,
+    MATCHINGCANCELED,
+    MATCHOK,
+    FAILDMATCH,
+    MATCHED,
+    READIED,
+    READYINGCANCEL,
+    READYINGCANCELED,
+    FAILDREADY,
+    STARTGAME,
+    GIVEUP,
+    RIVALDISCONNECTED,
+    SCOREUPDATE,
+    FAILDSCOREUPDATE,
+    ENDGAME
 }
