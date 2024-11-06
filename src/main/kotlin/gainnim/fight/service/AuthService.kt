@@ -12,7 +12,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.stereotype.Service
 
 @Service
-class AuthService(val userRepository: UserRepository, val passwordEncoder: BCryptPasswordEncoder, val jwtProvider: JwtProvider) {
+class AuthService(val userRepository: UserRepository, val passwordEncoder: BCryptPasswordEncoder, val jwtProvider: JwtProvider, val rankingService: RankingService) {
     fun signUp(request: SignUpRequest) {
         userRepository.findUserByName(request.name)?.let { throw CustomError(ErrorState.NAME_IS_ALREADY_USED) }
         userRepository.findUserByLoginId(request.loginId)?.let { throw CustomError(ErrorState.ID_IS_ALREADY_USED) }
@@ -21,7 +21,8 @@ class AuthService(val userRepository: UserRepository, val passwordEncoder: BCryp
                 loginId = request.loginId,
                 password = passwordEncoder.encode(request.password)
         )
-        userRepository.save(user)
+        val userId = userRepository.save(user).id
+        rankingService.setRanking(userId, 0)
     }
     fun login(request: LoginRequest): LoginResponse {
         val user = userRepository.findUserByLoginId(request.loginId) ?: throw CustomError(ErrorState.NOT_FOUND_ID)

@@ -2,6 +2,11 @@ package gainnim.fight.handler
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import gainnim.fight.entity.GameHistory
+import gainnim.fight.entity.Result
+import gainnim.fight.repository.GameHistoryRepository
+import gainnim.fight.repository.UserRepository
+import gainnim.fight.service.RankingService
 import gainnim.fight.util.jwt.JwtProvider
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
@@ -16,7 +21,7 @@ import java.util.Queue
 import java.util.UUID
 
 @Component
-class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
+class WebsocketHandler(val jwtProvider: JwtProvider, val rankingService: RankingService, val userRepository: UserRepository, val gameHistoryRepository: GameHistoryRepository): TextWebSocketHandler() {
     val log = LoggerFactory.getLogger(javaClass)
     val sessions: MutableMap<UUID, WebSocketSession> = mutableMapOf() // user -> id, session
     val userIds: MutableMap<WebSocketSession, UUID> = mutableMapOf() // user -> session, id
@@ -53,7 +58,7 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
         log.info(matchType.name)
         try {
             val userId = jwtProvider.getUuidByToken(token)
-            sessions[userId]?.let { throw Exception() }
+            sessions[userId]?.let { throw Exception() } // todo look
             val queue = matchQueue[matchType.name] ?: throw Exception()
             sessions.put(userId, session)
             userIds.put(session, userId)
@@ -143,8 +148,9 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
     }
     fun scoreUpdate(session: WebSocketSession, data: ScoreUpdateData) { // todo optimization
         try {
-            val userId = data.id
+            val userId = data.id // todo
             val room = rooms[data.roomId]!!
+            if (room.status == Status.READY) throw Exception()
             room.scores[userId] = data.score
             room.users.filter { it.key != userId }.keys.map { sendMessage(sessions[it]!!, Event.SCOREUPDATE, data.toMap()) } // todo remove !!
         } catch (e: Exception) {
@@ -154,6 +160,7 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
     fun giveup(session: WebSocketSession) {
         val roomId = inGameUserSessionsAndRoomIds[session]!!
         val room = rooms[roomId]!!
+        saveData(room, false)
         val userId = userIds[session]!!
         val winner = room.scores.filter { it.key != userId }
         val loser = room.scores.filter { it.key == userId }
@@ -185,6 +192,7 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
                 if (winner.value == loser.value) {
                     draw = true
                 }
+                saveData(room, draw)
                 room.users.keys.map {
                     try {
                         val session = sessions[it]!!  // todo remove !! what is it
@@ -215,6 +223,7 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
             userIds.remove(session)
             val roomId = inGameUserSessionsAndRoomIds[session]!!
             val room = rooms[roomId]!!
+            saveData(room, false)
             val winner = room.scores.filter { it.key != userId }
             val loser = room.scores.filter { it.key == userId }
             room.users.remove(userId)
@@ -234,6 +243,34 @@ class WebsocketHandler(val jwtProvider: JwtProvider): TextWebSocketHandler() {
             endTimestamps.remove(roomId)
             rooms.remove(roomId)
         } catch (e: Exception) { }
+    }
+    fun saveData(room: Room, draw: Boolean) {  //todo
+        room.scores.map {
+            val user = userRepository.findUserById(it.key) ?: throw Exception()  // todo jwt
+            val gainedStrength = (room.matchType.strength * 0.01 * it.value * (300 / (user.strength + 10)) + 1).toLong()
+            val gainedEndurance = (room.matchType.endurance * 0.01 * it.value * (300 / (user.endurance + 10 )) + 1).toLong()
+            val gainedAgility = (room.matchType.agility * 0.01 * it.value * (300 / (user.endurance + 10 )) + 1).toLong()
+            val gainedPower = gainedStrength + gainedEndurance + gainedAgility
+            userRepository.save(
+                    user.copy(
+                            strength = user.strength + gainedStrength,
+                            endurance = user.endurance + gainedEndurance,
+                            agility = user.agility + gainedAgility,
+                            totalPower = user.totalPower + gainedPower
+                    )
+            )
+            val result = if (draw) Result.DRAW else if (it.value == room.scores.maxBy { it.value }?.value) Result.WIN else Result.LOSE
+            gameHistoryRepository.save(
+                    GameHistory(
+                            user = user,
+                            matchType = room.matchType,
+                            result = result,
+                            score = it.value
+                    )
+            )
+            rankingService.updateRanking(it.key, gainedPower)
+            }
+//        }catch (e: Exception) {}
     }
     fun sendMessage(session: WebSocketSession, event: Event, data: Map<String, Any>) {
         val message = Message(
@@ -293,8 +330,13 @@ data class ScoreUpdateData(
         }
     }
 }
-enum class MatchType(val length: Int) {
-    SHORTSQUAT(30000), MIDDLESQUAT(300000), LONGSQUAT(1800000), SHORTPUSHUP(30000), MIDDLEPUSHUP(300000), LONGPUSHUP(1800000);
+enum class MatchType(val length: Int, val strength: Float, val endurance: Float, val agility: Float) {
+    SHORTSQUAT(30000, 1f, 0.7f, 0.3f),
+    MIDDLESQUAT(300000, 1f, 0.7f, 0.3f),
+    LONGSQUAT(1800000, 1f, 0.7f, 0.3f),
+    SHORTPUSHUP(30000, 0.8f, 0.4f, 0.8f),
+    MIDDLEPUSHUP(300000, 0.8f, 0.4f, 0.8f),
+    LONGPUSHUP(1800000, 0.8f, 0.4f, 0.8f);
     companion object {
         fun fromOrdinal(index: Int): MatchType {
             return values()[index]

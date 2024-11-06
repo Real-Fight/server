@@ -7,6 +7,7 @@ import gainnim.fight.service.AuthService
 import gainnim.fight.util.ResponseFormat
 import gainnim.fight.util.ResponseFormatBuilder
 import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
@@ -24,8 +25,9 @@ class AuthController(val authService: AuthService) {
     }
 
     @PostMapping("/login")
-    fun login(@RequestBody @Valid request: LoginRequest): ResponseEntity<ResponseFormat<LoginResponse>> {
+    fun login(@RequestBody @Valid request: LoginRequest, httpServletResponse: HttpServletResponse): ResponseEntity<ResponseFormat<LoginResponse>> {
         val result = authService.login(request)
+        httpServletResponse.setHeader("Authorization", result.accessToken)
         return ResponseEntity.ok(ResponseFormatBuilder { message = "success" }.build(result))
     }
 }
