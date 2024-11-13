@@ -7,5 +7,6 @@ data class RankingResponse(
         val name: String,
         val profileImgUrl: String,
         val ranking: Long,
+        val statusMessage: String,
         val totalPower: Long
 )

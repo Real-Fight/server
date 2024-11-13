@@ -79,12 +79,30 @@ class WebsocketHandler(val jwtProvider: JwtProvider, val rankingService: Ranking
                                 matchedUserId to UserStatus.READY
                         )
                 ))
+                val user = userRepository.findUserById(userId)!!  //todo Optimization and remove !!
+                val matchedUser = userRepository.findUserById(matchedUserId)!!  //todo Optimization and remove !!
+                val userRanking = rankingService.getRankingFromUserId(userId)
+                val matchedUserRanking = rankingService.getRankingFromUserId(matchedUserId)
                 sendMessage(session, Event.MATCHED, MatchedData(
                         rivalId = matchedUserId,
+                        rivalProfileImgUrl = matchedUser.profileImgUrl,
+                        rivalName = matchedUser.name,
+                        rivalRanking = matchedUserRanking,
+                        userId = userId,
+                        userProfileImgUrl = user.profileImgUrl,
+                        userName = user.name,
+                        userRanking = userRanking,
                         roomId = roomId
                 ).toMap())
                 sendMessage(sessions[matchedUserId]!!, Event.MATCHED, MatchedData(
                         rivalId = userId,
+                        rivalProfileImgUrl = user.profileImgUrl,
+                        rivalName = user.name,
+                        rivalRanking = userRanking,
+                        userId = matchedUserId,
+                        userProfileImgUrl = matchedUser.profileImgUrl,
+                        userName = matchedUser.name,
+                        userRanking = matchedUserRanking,
                         roomId = roomId
                 ).toMap())
             }
@@ -148,7 +166,7 @@ class WebsocketHandler(val jwtProvider: JwtProvider, val rankingService: Ranking
     }
     fun scoreUpdate(session: WebSocketSession, data: ScoreUpdateData) { // todo optimization
         try {
-            val userId = data.id // todo
+            val userId = userIds[session]!! // todo
             val room = rooms[data.roomId]!!
             if (room.status == Status.READY) throw Exception()
             room.scores[userId] = data.score
@@ -160,7 +178,7 @@ class WebsocketHandler(val jwtProvider: JwtProvider, val rankingService: Ranking
     fun giveup(session: WebSocketSession) {
         val roomId = inGameUserSessionsAndRoomIds[session]!!
         val room = rooms[roomId]!!
-        saveData(room, false)
+        val gainedStats = saveData(room, false)
         val userId = userIds[session]!!
         val winner = room.scores.filter { it.key != userId }
         val loser = room.scores.filter { it.key == userId }
@@ -170,7 +188,8 @@ class WebsocketHandler(val jwtProvider: JwtProvider, val rankingService: Ranking
                     mapOf(
                             "winner" to winner, // todo how to
                             "loser" to loser,
-                            "draw" to false
+                            "draw" to false,
+                            "gainedStats" to gainedStats
                     )
             )
             userIds.remove(session)
@@ -192,7 +211,7 @@ class WebsocketHandler(val jwtProvider: JwtProvider, val rankingService: Ranking
                 if (winner.value == loser.value) {
                     draw = true
                 }
-                saveData(room, draw)
+                val gainedStats = saveData(room, draw)
                 room.users.keys.map {
                     try {
                         val session = sessions[it]!!  // todo remove !! what is it
@@ -200,7 +219,8 @@ class WebsocketHandler(val jwtProvider: JwtProvider, val rankingService: Ranking
                                 mapOf(
                                         "winner" to winner,
                                         "loser" to loser,
-                                        "draw" to draw
+                                        "draw" to draw,
+                                        "gainedStats" to gainedStats
                                 )
                         )
                         userIds.remove(session)
@@ -223,7 +243,7 @@ class WebsocketHandler(val jwtProvider: JwtProvider, val rankingService: Ranking
             userIds.remove(session)
             val roomId = inGameUserSessionsAndRoomIds[session]!!
             val room = rooms[roomId]!!
-            saveData(room, false)
+            val gainedStats = saveData(room, false)
             val winner = room.scores.filter { it.key != userId }
             val loser = room.scores.filter { it.key == userId }
             room.users.remove(userId)
@@ -233,7 +253,8 @@ class WebsocketHandler(val jwtProvider: JwtProvider, val rankingService: Ranking
                         mapOf(
                             "winner" to winner,
                             "loser" to loser,
-                            "draw" to false
+                            "draw" to false,
+                            "gainedStats" to gainedStats
                         )
                 )
                 userIds.remove(session)
@@ -244,13 +265,17 @@ class WebsocketHandler(val jwtProvider: JwtProvider, val rankingService: Ranking
             rooms.remove(roomId)
         } catch (e: Exception) { }
     }
-    fun saveData(room: Room, draw: Boolean) {  //todo
+    fun saveData(room: Room, draw: Boolean): Map<String, Long> {  //todo
+        var gainedStrength = 0L
+        var gainedEndurance = 0L
+        var gainedAgility = 0L
+        var gainedPower = 0L
         room.scores.map {
             val user = userRepository.findUserById(it.key) ?: throw Exception()  // todo jwt
-            val gainedStrength = (room.matchType.strength * 0.01 * it.value * (300 / (user.strength + 10)) + 1).toLong()
-            val gainedEndurance = (room.matchType.endurance * 0.01 * it.value * (300 / (user.endurance + 10 )) + 1).toLong()
-            val gainedAgility = (room.matchType.agility * 0.01 * it.value * (300 / (user.endurance + 10 )) + 1).toLong()
-            val gainedPower = gainedStrength + gainedEndurance + gainedAgility
+            gainedStrength = (room.matchType.strength * 0.01 * it.value * (300 / (user.strength + 10))).toLong()
+            gainedEndurance = (room.matchType.endurance * 0.01 * it.value * (300 / (user.endurance + 10 ))).toLong()
+            gainedAgility = (room.matchType.agility * 0.01 * it.value * (300 / (user.endurance + 10 ))).toLong()
+            gainedPower = gainedStrength + gainedEndurance + gainedAgility
             userRepository.save(
                     user.copy(
                             strength = user.strength + gainedStrength,
@@ -270,6 +295,12 @@ class WebsocketHandler(val jwtProvider: JwtProvider, val rankingService: Ranking
             )
             rankingService.updateRanking(it.key, gainedPower)
             }
+        return mapOf(
+                "gainedStrength" to gainedStrength,
+                "gainedEndurance" to gainedEndurance,
+                "gainedAgility" to gainedAgility,
+                "gainedPower" to gainedPower
+        )
 //        }catch (e: Exception) {}
     }
     fun sendMessage(session: WebSocketSession, event: Event, data: Map<String, Any>) {
@@ -286,11 +317,25 @@ data class Message(
 )
 data class MatchedData(
         val rivalId: UUID,
+        val rivalProfileImgUrl: String,
+        val rivalName: String,
+        val rivalRanking: Long,
+        val userId: UUID,
+        val userProfileImgUrl: String,
+        val userName: String,
+        val userRanking: Long,
         val roomId: UUID
 ) {
     fun toMap(): Map<String, Any> {
         return mapOf(
                 "rivalId" to rivalId,
+                "rivalProfileImgUrl" to rivalProfileImgUrl,
+                "rivalName" to rivalName,
+                "rivalRanking" to rivalRanking,
+                "userId" to userId,
+                "userProfileImgUrl" to userProfileImgUrl,
+                "userName" to userName,
+                "userRanking" to userRanking,
                 "roomId" to roomId
         )
     }
@@ -306,16 +351,14 @@ data class ScoreUpdateData(
         val roomId: UUID,
         val timestamp: Timestamp,
         val score: Int,
-        val socreCangeVolumn: Int,
-        val id: UUID
+        val scoreChangeVolume: Int,
 ) {
     fun toMap(): Map<String, Any> {
         return mapOf(
                 "roomId" to roomId,
                 "timestamp" to timestamp,
                 "score" to score,
-                "socreCangeVolumn" to socreCangeVolumn,
-                "id" to id
+                "scoreChangeVolume" to scoreChangeVolume,
         )
     }
     companion object {
@@ -324,8 +367,7 @@ data class ScoreUpdateData(
                     roomId = UUID.fromString(data["roomId"] as String),
                     timestamp = Timestamp(data["timestamp"] as Long),
                     score = data["score"] as Int,
-                    socreCangeVolumn = data["socreCangeVolumn"] as Int,
-                    id = UUID.fromString(data["id"] as String)
+                    scoreChangeVolume = data["scoreChangeVolume"] as Int,
             )
         }
     }

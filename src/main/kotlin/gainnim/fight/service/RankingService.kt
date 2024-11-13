@@ -30,6 +30,7 @@ class RankingService(val redisTemplate: RedisTemplate<String, Any>, val userRepo
                     name = user.name,
                     profileImgUrl = user.profileImgUrl,
                     ranking = getRankingFromUserId(userId),
+                    statusMessage = user.statusMessage,
                     totalPower = zSetOperations.score(rankingKey, userId.toString())!!.toLong() // todo
             )
         }
