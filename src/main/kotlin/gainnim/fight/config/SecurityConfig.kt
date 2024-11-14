@@ -14,9 +14,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableWebSecurity
 class SecurityConfig(val tokenFilter: TokenFilter) {
     @Bean
-    fun passwordEncoder(): BCryptPasswordEncoder {
-        return BCryptPasswordEncoder()
-    }
+    fun passwordEncoder() = BCryptPasswordEncoder()
 
     @Bean
     fun filterChain(http: HttpSecurity): SecurityFilterChain? {

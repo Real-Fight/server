@@ -18,11 +18,15 @@ data class Quest(
         val user: User,
         val type: QuestType,
         val level: Long,
-        val count: Long = 0,
         val completed: Boolean = false
 )
 enum class QuestType(val length: Int, val message: String) {
-    SQUAT(20, "총 스쿼트"),
-    PUSHUP(20, "총 푸쉬업"),
-    MATCH(1, "운동한판")
+    SQUAT(20, "총 스쿼트 "),
+    PUSHUP(20, "총 푸쉬업 "),
+    SITUP(20, "총 윗몸일으키기 "),
+    MATCH(1, "운동한판 "),
+    WIN(1, "운동한판 승리 "),
+    SQUATPERONEGAME(10, "한판당 스쿼트 "),
+    PUSHUPPERONEGAME(10, "한판당 푸쉬업 "),
+    SITUPPERONEGAME(10, "한판당 윗몸일으키기 ")
 }

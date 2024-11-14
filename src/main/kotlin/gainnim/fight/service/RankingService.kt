@@ -10,18 +10,21 @@ import java.util.UUID
 @Service
 class RankingService(val redisTemplate: RedisTemplate<String, Any>, val userRepository: UserRepository) {
     val zSetOperations = redisTemplate.opsForZSet()
-//    val hashOperations = redisTemplate.opsForHash<String, String>()
+
+    //    val hashOperations = redisTemplate.opsForHash<String, String>()
     val rankingKey = "ranking"
     val userProfileKey = "profile"
     fun updateRanking(userId: UUID, gainedPower: Long) {
 //        zSetOperations.add(rankingKey, userId, totalPower.toDouble()) // todo look
         zSetOperations.incrementScore(rankingKey, userId.toString(), gainedPower.toDouble())
     }
+
     fun getRankingFromUserId(userId: UUID): Long {
         return zSetOperations.reverseRank(rankingKey, userId.toString())!! + 1
     }
+
     fun getRanking(page: Long): List<RankingResponse> {
-        val ranks = zSetOperations.reverseRange(rankingKey, page, page+99)
+        val ranks = zSetOperations.reverseRange(rankingKey, page, page + 99)
         return ranks!!.map {
             val userId = UUID.fromString(it.toString())
             val user = userRepository.findUserById(userId)!! // todo tlqkf optimization
@@ -35,12 +38,14 @@ class RankingService(val redisTemplate: RedisTemplate<String, Any>, val userRepo
             )
         }
     }
+
     fun setRanking(userId: UUID, totalPower: Long) {
         zSetOperations.add(rankingKey, userId.toString(), totalPower.toDouble())
     }
+
     fun initializeRanking(users: List<User>) {
         redisTemplate.delete(rankingKey)
-        users.map {
+        users.forEach {
             setRanking(it.id, it.totalPower)
 //            zSetOperations.add(rankingKey, it.id, it.totalPower.toDouble())
 //            updateRanking(it.id, it.totalPower)

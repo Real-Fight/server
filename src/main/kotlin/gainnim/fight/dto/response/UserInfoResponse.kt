@@ -16,19 +16,17 @@ data class UserInfoResponse(
         val ranking: Long
 ) {
     companion object {
-        fun fromUser(user: User, ranking: Long): UserInfoResponse {
-            return UserInfoResponse(
-                    id = user.id,
-                    name = user.name,
-                    profileImgUrl = user.profileImgUrl,
-                    statusMessage = user.statusMessage,
-                    strength = user.strength,
-                    endurance = user.endurance,
-                    agility = user.agility,
-                    willpower = user.willpower,
-                    totalPower = user.totalPower,
-                    ranking = ranking
-            )
-        }
+        fun fromUser(user: User, ranking: Long) = UserInfoResponse(
+                id = user.id,
+                name = user.name,
+                profileImgUrl = user.profileImgUrl,
+                statusMessage = user.statusMessage,
+                strength = user.strength,
+                endurance = user.endurance,
+                agility = user.agility,
+                willpower = user.willpower,
+                totalPower = user.totalPower,
+                ranking = ranking
+        )
     }
 }

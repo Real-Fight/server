@@ -17,13 +17,11 @@ import org.springframework.context.annotation.Configuration
 class SwaggerConfig {
 
     @Bean
-    fun customOpenAPI(): OpenAPI {
-        return OpenAPI()
-                .info(
-                        Info().title("API Documentation")
-                                .description("Swagger UI with JWT Authorization")
-                                .version("1.0")
-                )
-                .addSecurityItem(SecurityRequirement().addList("Authorization"))
-    }
+    fun customOpenAPI(): OpenAPI = OpenAPI()
+            .info(
+                    Info().title("API Documentation")
+                            .description("Swagger UI with JWT Authorization")
+                            .version("1.0")
+            )
+            .addSecurityItem(SecurityRequirement().addList("Authorization"))
 }

@@ -20,42 +20,43 @@ import kotlin.io.encoding.Base64
 
 @Component
 class JwtProvider(
-    @Value("\${jwt.secret}") val secret: String,
-    @Value("\${jwt.token-expires-time}") val accessTokenExpiresTime: Long
-): InitializingBean {
+        @Value("\${jwt.secret}") val secret: String,
+        @Value("\${jwt.token-expires-time}") val accessTokenExpiresTime: Long
+) : InitializingBean {
     lateinit var key: Key
+    val log = LoggerFactory.getLogger(javaClass)
+
     @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
     override fun afterPropertiesSet() {
         val keyByte = Base64.decode(secret)
         this.key = Keys.hmacShaKeyFor(keyByte)
     }
-    val log = LoggerFactory.getLogger(javaClass)
 
     fun createToken(uuid: UUID): String {
         val date = Date(System.currentTimeMillis() + accessTokenExpiresTime)
         return Jwts.builder()
-            .setSubject(uuid.toString())
-            .signWith(key, SignatureAlgorithm.HS512)
-            .setExpiration(date)
-            .compact()
+                .setSubject(uuid.toString())
+                .signWith(key, SignatureAlgorithm.HS512)
+                .setExpiration(date)
+                .compact()
     }
 
     fun getAuthenticationByToken(token: String): Authentication {
         val claims = Jwts.parserBuilder()
-            .setSigningKey(key)
-            .build()
-            .parseClaimsJws(token)
-            .body
+                .setSigningKey(key)
+                .build()
+                .parseClaimsJws(token)
+                .body
         val principal = User(claims.subject, "", setOf(SimpleGrantedAuthority("user")))
         return UsernamePasswordAuthenticationToken(principal, token, setOf(SimpleGrantedAuthority("user")))
     }
 
     fun getUuidByToken(token: String): UUID {
         val claims = Jwts.parserBuilder()
-            .setSigningKey(key)
-            .build()
-            .parseClaimsJws(token)
-            .body
+                .setSigningKey(key)
+                .build()
+                .parseClaimsJws(token)
+                .body
         return UUID.fromString(claims.subject)
     }
 

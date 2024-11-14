@@ -31,7 +31,10 @@ class WebsocketHandler(val jwtProvider: JwtProvider, val rankingService: Ranking
             "LONGSQUAT" to LinkedList(),
             "SHORTPUSHUP" to LinkedList(),
             "MIDDLEPUSHUP" to LinkedList(),
-            "LONGPUSHUP" to LinkedList()
+            "LONGPUSHUP" to LinkedList(),
+            "SHORTSITUP" to LinkedList(),
+            "MIDDLESITUP" to LinkedList(),
+            "LONGSITUP" to LinkedList()
     )
     val rooms: MutableMap<UUID, Room> = mutableMapOf()
     val inGameUserSessionsAndRoomIds: MutableMap<WebSocketSession, UUID> = mutableMapOf()  // session, roomId
@@ -374,24 +377,27 @@ data class ScoreUpdateData(
 }
 enum class MatchType(val length: Int, val strength: Float, val endurance: Float, val agility: Float) {
     SHORTSQUAT(30000, 1f, 0.7f, 0.3f),
-    MIDDLESQUAT(300000, 1f, 0.7f, 0.3f),
-    LONGSQUAT(1800000, 1f, 0.7f, 0.3f),
+    MIDDLESQUAT(180000, 1f, 0.7f, 0.3f),
+    LONGSQUAT(600000, 1f, 0.7f, 0.3f),
     SHORTPUSHUP(30000, 0.8f, 0.4f, 0.8f),
-    MIDDLEPUSHUP(300000, 0.8f, 0.4f, 0.8f),
-    LONGPUSHUP(1800000, 0.8f, 0.4f, 0.8f);
+    MIDDLEPUSHUP(180000, 0.8f, 0.4f, 0.8f),
+    LONGPUSHUP(600000, 0.8f, 0.4f, 0.8f),
+    SHORTSITUP(30000, 0.4f, 0.8f, 0.8f),
+    MIDDLESITUP(180000, 0.4f, 0.8f, 0.8f),
+    LONGSITUP(600000, 0.4f, 0.8f, 0.8f);
     companion object {
         fun fromOrdinal(index: Int): MatchType {
             return values()[index]
         }
     }
 }
-enum class Status() {
+enum class Status {
     READY, PROGRESS
 }
-enum class UserStatus() {
+enum class UserStatus {
     READY, ON
 }
-enum class Event() {
+enum class Event {
     BADREQUEST,
     RANDOMMATCH,
     MATCHINGCANCEL,
