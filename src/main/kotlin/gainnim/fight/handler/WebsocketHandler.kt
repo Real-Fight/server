@@ -25,16 +25,18 @@ class WebsocketHandler(val jwtProvider: JwtProvider, val rankingService: Ranking
     val log = LoggerFactory.getLogger(javaClass)
     val sessions: MutableMap<UUID, WebSocketSession> = mutableMapOf() // user -> id, session
     val userIds: MutableMap<WebSocketSession, UUID> = mutableMapOf() // user -> session, id
-    val matchQueue: MutableMap<String, Queue<UUID>> = mutableMapOf(
-            "SHORTSQUAT" to LinkedList(),
-            "MIDDLESQUAT" to LinkedList(),
-            "LONGSQUAT" to LinkedList(),
-            "SHORTPUSHUP" to LinkedList(),
-            "MIDDLEPUSHUP" to LinkedList(),
-            "LONGPUSHUP" to LinkedList(),
-            "SHORTSITUP" to LinkedList(),
-            "MIDDLESITUP" to LinkedList(),
-            "LONGSITUP" to LinkedList()
+    val matchQueue: MutableMap<String, Queue<UUID>> = ConcurrentHashMap(
+        mapOf(
+            "SHORTSQUAT" to ConcurrentLinkedQueue(),
+            "MIDDLESQUAT" to ConcurrentLinkedQueue(),
+            "LONGSQUAT" to ConcurrentLinkedQueue(),
+            "SHORTPUSHUP" to ConcurrentLinkedQueue(),
+            "MIDDLEPUSHUP" to ConcurrentLinkedQueue(),
+            "LONGPUSHUP" to ConcurrentLinkedQueue(),
+            "SHORTSITUP" to ConcurrentLinkedQueue(),
+            "MIDDLESITUP" to ConcurrentLinkedQueue(),
+            "LONGSITUP" to ConcurrentLinkedQueue()
+        )
     )
     val rooms: MutableMap<UUID, Room> = mutableMapOf()
     val inGameUserSessionsAndRoomIds: MutableMap<WebSocketSession, UUID> = mutableMapOf()  // session, roomId
